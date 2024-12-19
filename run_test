@@ -2,6 +2,18 @@
 
 TEST_SESSION="test_tmux_mark"
 TEST_TMUX_CONF="/tmp/tmux_mark_test.conf"
+PASS_COUNT=0
+FAIL_COUNT=0
+
+# Helper functions for test logging
+pass() {
+    echo "PASS: $1"
+    ((PASS_COUNT++))
+}
+fail() {
+    echo "FAIL: $1"
+    ((FAIL_COUNT++))
+}
 
 # Step 1: Create a temporary tmux configuration file
 echo "Creating temporary tmux configuration for testing..."
@@ -22,7 +34,7 @@ bind [ run-shell "~/.tmux/tmux-mark/scripts/jump_prev.sh"
 set -g status off
 EOL
 
-# Step 2: Start tests
+# Step 2: Start Tests
 echo "Starting tmux-mark automated test suite..."
 
 # Ensure the test session is clean
@@ -36,14 +48,18 @@ sleep 1
 send "tmux send-keys -t $TEST_SESSION m\r"
 expect {
     "Error: Marks can only be added in copy mode." {
-        puts "PASS: Marks not added outside copy mode."
+        exit 0
     }
     timeout {
-        puts "FAIL: Expected error message not found."
         exit 1
     }
 }
 EOF
+if [ $? -eq 0 ]; then
+    pass "Marks cannot be added outside copy mode."
+else
+    fail "Marks were incorrectly allowed outside copy mode."
+fi
 
 # Test 2: Verify Marks Can Be Added in Copy Mode
 echo "Running Test 2: Marks can be added in copy mode..."
@@ -53,14 +69,18 @@ sleep 1
 send "tmux send-keys -t $TEST_SESSION m\r"
 expect {
     "Mark added at*" {
-        puts "PASS: Mark added successfully in copy mode."
+        exit 0
     }
     timeout {
-        puts "FAIL: Failed to add marks in copy mode."
         exit 1
     }
 }
 EOF
+if [ $? -eq 0 ]; then
+    pass "Marks can be added successfully in copy mode."
+else
+    fail "Failed to add marks in copy mode."
+fi
 
 # Test 3: Verify Navigation to Next Mark
 echo "Running Test 3: Jump to next mark..."
@@ -70,18 +90,56 @@ send "tmux send-keys -t $TEST_SESSION m\r"
 send "tmux send-keys -t $TEST_SESSION ]\r"
 expect {
     "Jumped to mark*" {
-        puts "PASS: Successfully jumped to next mark."
+        exit 0
     }
     timeout {
-        puts "FAIL: Jump to next mark failed."
         exit 1
     }
 }
 EOF
+if [ $? -eq 0 ]; then
+    pass "Successfully jumped to next mark."
+else
+    fail "Failed to jump to next mark."
+fi
+
+# Test 4: Intentional Failure - Add Marks Without Plugin Loaded
+echo "Running Test 4: Intentional failure - Adding marks without plugin..."
+tmux kill-session -t "$TEST_SESSION" 2>/dev/null
+tmux -f /dev/null new-session -d -s "$TEST_SESSION" "sleep 10"
+expect <<EOF
+send "tmux send-keys -t $TEST_SESSION m\r"
+expect {
+    "Error: Marks can only be added in copy mode." {
+        exit 0
+    }
+    timeout {
+        exit 1
+    }
+}
+EOF
+if [ $? -eq 0 ]; then
+    fail "Marks should not work without plugin, but it showed an error (as expected)."
+else
+    pass "Marks do not work without the plugin loaded."
+fi
 
 # Step 3: Cleanup
 echo "Cleaning up test session and temporary configuration..."
 tmux kill-session -t "$TEST_SESSION" 2>/dev/null
 rm -f "$TEST_TMUX_CONF"
 
-echo "All tests completed successfully."
+# Final Report
+echo "---------------------------------------"
+echo "Test Suite Completed."
+echo "Passed: $PASS_COUNT"
+echo "Failed: $FAIL_COUNT"
+echo "---------------------------------------"
+
+if [ $FAIL_COUNT -eq 0 ]; then
+    echo "All tests passed successfully!"
+    exit 0
+else
+    echo "$FAIL_COUNT test(s) failed."
+    exit 1
+fi
