@@ -3,6 +3,11 @@
 MARK_FILE="/tmp/tmux_marks"
 CURRENT_MARK=$(tmux display-message -p "#{pane_id}")
 
+if [ "$PANE_MODE" != "copy-mode" ]; then
+    tmux display-message "Error: Marks can only be added in copy mode."
+    exit 1
+fi
+
 # Read marks and jump to the previous
 if [ -f "$MARK_FILE" ]; then
     PREV_MARK=$(awk -v current="$CURRENT_MARK" '
