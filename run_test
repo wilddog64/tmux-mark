@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+TEST_SESSION="test_tmux_mark"
+TEST_TMUX_CONF="/tmp/tmux_mark_test.conf"
+
+# Step 1: Create a temporary tmux configuration file
+echo "Creating temporary tmux configuration for testing..."
+
+cat > "$TEST_TMUX_CONF" <<EOL
+# Load the tmux-mark plugin
+run-shell ~/.tmux/tmux-mark/tmux-mark.tmux
+
+# Test-specific keybindings
+unbind m
+unbind ]
+unbind [
+bind m run-shell "~/.tmux/tmux-mark/scripts/add_mark.sh"
+bind ] run-shell "~/.tmux/tmux-mark/scripts/jump_next.sh"
+bind [ run-shell "~/.tmux/tmux-mark/scripts/jump_prev.sh"
+
+# Minimal settings for testing
+set -g status off
+EOL
+
+# Step 2: Start tests
+echo "Starting tmux-mark automated test suite..."
+
+# Ensure the test session is clean
+tmux kill-session -t "$TEST_SESSION" 2>/dev/null
+
+# Test 1: Verify Marks Cannot Be Added Outside Copy Mode
+echo "Running Test 1: Marks cannot be added outside copy mode..."
+expect <<EOF
+spawn tmux -f $TEST_TMUX_CONF new-session -d -s $TEST_SESSION "sleep 10"
+sleep 1
+send "tmux send-keys -t $TEST_SESSION m\r"
+expect {
+    "Error: Marks can only be added in copy mode." {
+        puts "PASS: Marks not added outside copy mode."
+    }
+    timeout {
+        puts "FAIL: Expected error message not found."
+        exit 1
+    }
+}
+EOF
+
+# Test 2: Verify Marks Can Be Added in Copy Mode
+echo "Running Test 2: Marks can be added in copy mode..."
+expect <<EOF
+send "tmux copy-mode -t $TEST_SESSION\r"
+sleep 1
+send "tmux send-keys -t $TEST_SESSION m\r"
+expect {
+    "Mark added at*" {
+        puts "PASS: Mark added successfully in copy mode."
+    }
+    timeout {
+        puts "FAIL: Failed to add marks in copy mode."
+        exit 1
+    }
+}
+EOF
+
+# Test 3: Verify Navigation to Next Mark
+echo "Running Test 3: Jump to next mark..."
+expect <<EOF
+send "tmux copy-mode -t $TEST_SESSION\r"
+send "tmux send-keys -t $TEST_SESSION m\r"
+send "tmux send-keys -t $TEST_SESSION ]\r"
+expect {
+    "Jumped to mark*" {
+        puts "PASS: Successfully jumped to next mark."
+    }
+    timeout {
+        puts "FAIL: Jump to next mark failed."
+        exit 1
+    }
+}
+EOF
+
+# Step 3: Cleanup
+echo "Cleaning up test session and temporary configuration..."
+tmux kill-session -t "$TEST_SESSION" 2>/dev/null
+rm -f "$TEST_TMUX_CONF"
+
+echo "All tests completed successfully."
