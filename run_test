@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 TEST_SESSION="test_tmux_mark"
 TEST_TMUX_CONF="/tmp/tmux_mark_test.conf"
@@ -17,12 +17,32 @@ echo "Creating temporary tmux configurations for testing..."
 # Configuration with plugin loaded
 cat > "$TEST_TMUX_CONF" <<EOL
 run-shell "$PLUGIN_DIR/tmux-mark.tmux"
+
+# Keybindings for testing
 unbind m
 unbind ]
 unbind [
-bind m run-shell "$PLUGIN_DIR/scripts/add_mark.sh"
+bind m switch-client -T mark-mode
+bind ] switch-client -T jump-mode
+bind [ switch-client -T jump-mode
+
+# Jump to next/previous marks
 bind ] run-shell "$PLUGIN_DIR/scripts/jump_next.sh"
 bind [ run-shell "$PLUGIN_DIR/scripts/jump_prev.sh"
+
+# Mark table (for marks a-z)
+bind -T mark-mode a run-shell "$PLUGIN_DIR/scripts/add_mark.sh a"
+bind -T mark-mode b run-shell "$PLUGIN_DIR/scripts/add_mark.sh b"
+bind -T mark-mode c run-shell "$PLUGIN_DIR/scripts/add_mark.sh c"
+
+# Jump table (for marks a-z)
+bind -T jump-mode a run-shell "$PLUGIN_DIR/scripts/jump_to_mark.sh a"
+bind -T jump-mode b run-shell "$PLUGIN_DIR/scripts/jump_to_mark.sh b"
+bind -T jump-mode c run-shell "$PLUGIN_DIR/scripts/jump_to_mark.sh c"
+
+# Exit mark/jump modes
+bind -T mark-mode Escape switch-client -T root
+bind -T jump-mode Escape switch-client -T root
 EOL
 
 # Empty configuration for Test 4
@@ -35,7 +55,7 @@ clean_tmux() {
     tmux kill-session -t "$TEST_SESSION" 2>/dev/null
 }
 
-# Test Case Function
+# Function to run expect tests
 run_expect_test() {
     local test_name="$1"
     local expect_script="$2"
@@ -51,33 +71,41 @@ run_expect_test() {
 
 # Step 2: Test Cases
 
-# Test 1: Marks cannot be added outside copy mode
+# Test 1: Set mark 'a' with m + a
 clean_tmux
-run_expect_test "Test 1: Marks cannot be added outside copy mode" "
-    spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
-    set timeout 5
-    send \"tmux send-keys -t $TEST_SESSION m\\r\"
-    expect {
-        \"Error: Marks can only be added in copy mode.\" { exit 0 }
-        timeout { exit 1 }
-    }
-"
-
-# Test 2: Marks can be added in copy mode
-clean_tmux
-run_expect_test "Test 2: Marks can be added in copy mode" "
+run_expect_test "Test 1: Set mark 'a'" "
     spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
     set timeout 5
     send \"tmux copy-mode\\r\"
     sleep 1
     send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION a\\r\"
+    sleep 1
     expect {
-        \"Mark added at*\" { exit 0 }
+        \"Mark 'a' set*\" { exit 0 }
         timeout { exit 1 }
     }
 "
 
-# Test 3: Jump to next mark
+# Test 2: Jump to mark 'a' with ]a
+clean_tmux
+run_expect_test "Test 2: Jump to mark 'a'" "
+    spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
+    set timeout 5
+    send \"tmux copy-mode\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION ]\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION a\\r\"
+    sleep 1
+    expect {
+        \"Jumped to mark 'a'*\" { exit 0 }
+        timeout { exit 1 }
+    }
+"
+
+# Test 3: Sequential navigation - Jump to next mark
 clean_tmux
 run_expect_test "Test 3: Jump to next mark" "
     spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
@@ -85,14 +113,18 @@ run_expect_test "Test 3: Jump to next mark" "
     send \"tmux copy-mode\\r\"
     sleep 1
     send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION a\\r\"
+    sleep 1
     send \"tmux send-keys -t $TEST_SESSION ]\\r\"
+    sleep 1
     expect {
-        \"Jumped to mark*\" { exit 0 }
+        \"Jumped to mark 'a'*\" { exit 0 }
         timeout { exit 1 }
     }
 "
 
-# Test 4: Fail Case - Adding Marks Without Plugin
+# Test 4: Fail case - Adding marks without plugin
 clean_tmux
 run_expect_test "Test 4: Fail case - Adding marks without plugin" "
     spawn tmux -f \"$EMPTY_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
@@ -100,8 +132,11 @@ run_expect_test "Test 4: Fail case - Adding marks without plugin" "
     send \"tmux copy-mode\\r\"
     sleep 1
     send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION a\\r\"
+    sleep 1
     expect {
-        \"Mark added at*\" { exit 1 }
+        \"Mark 'a' set*\" { exit 1 }
         timeout { exit 0 }
     }
 "
