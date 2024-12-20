@@ -1,32 +1,56 @@
-# tmux-mark
+# tmux-mark: Vim-Like Marks for Tmux
 
-**tmux-mark** is a plugin for tmux that brings Vim-like mark functionality to your terminal multiplexing workflow. It allows you to mark locations in panes, navigate between them sequentially, and jump directly to specific marks using single-letter keys (`a-z`).
-
----
-
-## Features
-
-- **Set Marks**: Use `prefix + m` followed by a letter (`a-z`) to mark a location.
-- **Jump to Marks**:
-  - `prefix + ]` followed by a letter (`a-z`) jumps to a specific mark.
-  - `prefix + ]` jumps to the next mark sequentially.
-  - `prefix + [` jumps to the previous mark sequentially.
-- **Persistent Marks**: Marks are stored in `~/.tmux-marks.json` and persist across sessions.
-- **Vim-like Keybindings**: Intuitive and familiar for Vim users.
+**tmux-mark** is a plugin that brings **Vim-like mark navigation** to tmux. It allows you to set marks in panes, jump directly to specific marks using `a-z`, and navigate sequentially between marks.
 
 ---
 
-## Installation
+## Installation and Configuration
 
-### Prerequisites
+To install and configure **tmux-mark** using TPM, copy and paste the following commands:
 
-- `tmux` version 2.6 or higher
-- `jq` for handling JSON data
-
-Install `jq` if not already installed:
 ```bash
-# Ubuntu/Debian
-sudo apt-get install jq
+# Install prerequisites: tmux and jq
+## Ubuntu/Debian
+sudo apt-get install tmux jq -y
+## macOS
+brew install tmux jq
 
-# macOS (Homebrew)
-brew install jq
+# Install and configure Tmux Plugin Manager (TPM)
+
+## How to configure tmux-marks (TPM)
+
+    # Install tmux-mark plugin with TPM
+    set -g @plugin 'wilddog64/tmux-mark'
+
+    # Keybindings for Vim-like mark navigation
+    bind m switch-client -T mark-mode
+    bind ] switch-client -T jump-mode
+    bind [ switch-client -T jump-mode
+
+    # Sequential navigation (next/previous marks)
+    bind ] run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_next.sh
+    bind [ run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_prev.sh
+
+    # Mark mode: set marks a-z
+    bind -T mark-mode a run-shell ~/.tmux/plugins/tmux-mark/scripts/add_mark.sh a
+    bind -T mark-mode b run-shell ~/.tmux/plugins/tmux-mark/scripts/add_mark.sh b
+    bind -T mark-mode c run-shell ~/.tmux/plugins/tmux-mark/scripts/add_mark.sh c
+    # Repeat for all letters a-z
+    bind -T mark-mode z run-shell ~/.tmux/plugins/tmux-mark/scripts/add_mark.sh z
+
+    # Jump mode: jump to marks a-z
+    bind -T jump-mode a run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_to_mark.sh a
+    bind -T jump-mode b run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_to_mark.sh b
+    bind -T jump-mode c run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_to_mark.sh c
+    # Repeat for all letters a-z
+    bind -T jump-mode z run-shell ~/.tmux/plugins/tmux-mark/scripts/jump_to_mark.sh z
+
+    # Exit mark or jump modes
+    bind -T mark-mode Escape switch-client -T root
+
+# Reload tmux configuration
+tmux source-file ~/.tmux.conf
+
+## Install tmux-mark plugin with TPM
+<prefix>I to install plugin
+<prefix>R to reload .tmux.conf
