@@ -1,11 +1,11 @@
-# Add a mark at the current cursor position
-bind m run-shell "$PWD/scripts/add_mark.sh"
+# Add mark
+bind m run-shell "~/.tmux/tmux-mark/scripts/add_mark.sh"
 
-# Jump to the next mark
-bind ] run-shell "$PWD/scripts/jump_next.sh"
+# Jump to next mark
+bind ] run-shell "~/.tmux/tmux-mark/scripts/jump_next.sh"
 
-# Jump to the previous mark
-bind [ run-shell "$PWD/scripts/jump_prev.sh"
+# Clear all marks
+bind M run-shell "~/.tmux/tmux-mark/scripts/clear_marks.sh"
 
-# Reload tmux configuration
-tmux source-file ~/.tmux.conf
+# Restore marks on tmux start
+if-shell 'test -f ~/.tmux-marks.json' "run-shell ~/.tmux/tmux-mark/scripts/restore_marks.sh"
