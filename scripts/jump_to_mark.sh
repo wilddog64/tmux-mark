@@ -1,7 +1,7 @@
 #!/bin/bash
 
 MARK_FILE="$HOME/.tmux-marks.json"
-MARK_KEY="$1"  # Mark key passed as argument
+MARK_KEY="$1"  # Specific mark key passed as argument
 
 # Validate mark key
 if [[ ! "$MARK_KEY" =~ ^[a-z]$ ]]; then
