@@ -20,7 +20,7 @@ echo "Creating temporary tmux configuration for testing..."
 
 cat > "$TEST_TMUX_CONF" <<EOL
 # Load the tmux-mark plugin
-run-shell ~/.tmux/tmux-mark/tmux-mark.tmux
+run-shell $(pwd)/tmux-mark/tmux-mark.tmux
 
 # Test-specific keybindings
 unbind m
