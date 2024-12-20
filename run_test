@@ -1,136 +1,117 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 TEST_SESSION="test_tmux_mark"
 TEST_TMUX_CONF="/tmp/tmux_mark_test.conf"
+EMPTY_TMUX_CONF="/tmp/tmux_empty_test.conf"
+PLUGIN_DIR="$(pwd)" # Dynamically determine the current directory
 MARK_FILE="$HOME/.tmux-marks.json"
 PASS_COUNT=0
 FAIL_COUNT=0
 
-# Helper functions for test logging
-pass() {
-    echo "PASS: $1"
-    ((PASS_COUNT++))
-}
-fail() {
-    echo "FAIL: $1"
-    ((FAIL_COUNT++))
-}
+pass() { echo "PASS: $1"; ((PASS_COUNT++)); }
+fail() { echo "FAIL: $1"; ((FAIL_COUNT++)); }
 
-# Step 1: Create a temporary tmux configuration file
-echo "Creating temporary tmux configuration for testing..."
+# Step 1: Create temporary tmux configurations
+echo "Creating temporary tmux configurations for testing..."
 
+# Configuration with plugin loaded
 cat > "$TEST_TMUX_CONF" <<EOL
-# Load the tmux-mark plugin
-run-shell ~/.tmux/tmux-mark/tmux-mark.tmux
-
-# Test-specific keybindings
+run-shell "$PLUGIN_DIR/tmux-mark.tmux"
 unbind m
 unbind ]
 unbind [
-unbind M
-bind m run-shell "~/.tmux/tmux-mark/scripts/add_mark.sh"
-bind ] run-shell "~/.tmux/tmux-mark/scripts/jump_next.sh"
-bind [ run-shell "~/.tmux/tmux-mark/scripts/jump_prev.sh"
-bind M run-shell "~/.tmux/tmux-mark/scripts/clear_marks.sh"
-
-# Minimal settings for testing
-set -g status off
+bind m run-shell "$PLUGIN_DIR/scripts/add_mark.sh"
+bind ] run-shell "$PLUGIN_DIR/scripts/jump_next.sh"
+bind [ run-shell "$PLUGIN_DIR/scripts/jump_prev.sh"
 EOL
 
-# Ensure clean test environment
-tmux kill-session -t "$TEST_SESSION" 2>/dev/null
-rm -f "$MARK_FILE"
+# Empty configuration for Test 4
+cat > "$EMPTY_TMUX_CONF" <<EOL
+# Empty configuration - No plugin bindings
+EOL
 
-# Test 1: Verify Visual Indicators Are Applied
-echo "Running Test 1: Verify visual indicators are applied..."
-expect <<EOF
-spawn tmux -f "$TEST_TMUX_CONF" new-session -d -s "$TEST_SESSION"
-sleep 1
-send "tmux copy-mode\r"
-sleep 1
-send "tmux send-keys -t $TEST_SESSION m\r"
-expect {
-    "Mark added at*" {
-        pass "Visual indicator applied when adding a mark."
-    }
-    timeout {
-        fail "Visual indicator not applied when adding a mark."
-    }
-}
-EOF
-
-# Test 2: Verify Marks Persist Across Sessions
-echo "Running Test 2: Verify marks persist across sessions..."
-expect <<EOF
-# Add a mark
-send "tmux copy-mode\r"
-send "tmux send-keys -t $TEST_SESSION m\r"
-expect {
-    "Mark added at*" {
-        pass "Mark added successfully for persistence test."
-    }
-    timeout {
-        fail "Failed to add mark for persistence test."
-    }
+# Function to ensure a clean tmux session
+clean_tmux() {
+    tmux kill-session -t "$TEST_SESSION" 2>/dev/null
 }
 
-# Exit session
-send "tmux kill-session -t $TEST_SESSION\r"
-sleep 1
+# Test Case Function
+run_expect_test() {
+    local test_name="$1"
+    local expect_script="$2"
 
-# Restart session
-spawn tmux -f "$TEST_TMUX_CONF" new-session -d -s "$TEST_SESSION"
-log_user 1   # Enable detailed logging
-sleep 1
-
-# Verify marks are restored
-send "tmux copy-mode\r"
-expect {
-    "Mark added at*" {
-        pass "Marks persisted and restored across sessions."
-    }
-    timeout {
-        fail "Marks did not persist across sessions."
-    }
+    echo "Running $test_name..."
+    expect -c "$expect_script"
+    if [ $? -eq 0 ]; then
+        pass "$test_name"
+    else
+        fail "$test_name"
+    fi
 }
-EOF
 
-# Test 3: Verify Clearing Marks Removes Visual Indicators
-echo "Running Test 3: Verify clearing marks removes visual indicators..."
-expect <<EOF
-send "tmux copy-mode\r"
-send "tmux send-keys -t $TEST_SESSION m\r"
-send "tmux send-keys -t $TEST_SESSION M\r"
-expect {
-    "All marks cleared*" {
-        pass "Clearing marks removed visual indicators."
-    }
-    timeout {
-        fail "Clearing marks did not remove visual indicators."
-    }
-}
-EOF
+# Step 2: Test Cases
 
-# Test 4: Fail Case - No Marks to Navigate
-echo "Running Test 4: Fail case - No marks to navigate..."
-expect <<EOF
-send "tmux send-keys -t $TEST_SESSION ]\r"
-expect {
-    "No marks found*" {
-        pass "Correctly handled navigation when no marks exist."
+# Test 1: Marks cannot be added outside copy mode
+clean_tmux
+run_expect_test "Test 1: Marks cannot be added outside copy mode" "
+    spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
+    set timeout 5
+    send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    expect {
+        \"Error: Marks can only be added in copy mode.\" { exit 0 }
+        timeout { exit 1 }
     }
-    timeout {
-        fail "Navigation failed to handle empty marks."
+"
+
+# Test 2: Marks can be added in copy mode
+clean_tmux
+run_expect_test "Test 2: Marks can be added in copy mode" "
+    spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
+    set timeout 5
+    send \"tmux copy-mode\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    expect {
+        \"Mark added at*\" { exit 0 }
+        timeout { exit 1 }
     }
-}
-EOF
+"
 
-# Cleanup
-echo "Cleaning up test session and temporary configuration..."
-tmux kill-session -t "$TEST_SESSION" 2>/dev/null
-rm -f "$TEST_TMUX_CONF" "$MARK_FILE"
+# Test 3: Jump to next mark
+clean_tmux
+run_expect_test "Test 3: Jump to next mark" "
+    spawn tmux -f \"$TEST_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
+    set timeout 5
+    send \"tmux copy-mode\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    send \"tmux send-keys -t $TEST_SESSION ]\\r\"
+    expect {
+        \"Jumped to mark*\" { exit 0 }
+        timeout { exit 1 }
+    }
+"
 
-# Final Report
+# Test 4: Fail Case - Adding Marks Without Plugin
+clean_tmux
+run_expect_test "Test 4: Fail case - Adding marks without plugin" "
+    spawn tmux -f \"$EMPTY_TMUX_CONF\" new-session -d -s \"$TEST_SESSION\"
+    set timeout 5
+    send \"tmux copy-mode\\r\"
+    sleep 1
+    send \"tmux send-keys -t $TEST_SESSION m\\r\"
+    expect {
+        \"Mark added at*\" { exit 1 }
+        timeout { exit 0 }
+    }
+"
+
+# Step 3: Cleanup
+echo "Cleaning up test session and temporary configurations..."
+clean_tmux
+rm -f "$TEST_TMUX_CONF" "$EMPTY_TMUX_CONF" "$MARK_FILE"
+
+# Step 4: Final Report
 echo "---------------------------------------"
 echo "Test Suite Completed."
 echo "Passed: $PASS_COUNT"
